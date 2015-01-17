@@ -109,8 +109,9 @@ class State
 			SELECT se.cmid, se.sectionid, se.position
 			FROM {block_sort_state_entry} se
 			INNER JOIN {block_sort_state} s
-				ON s.id=se.stateid
+				ON s.id = se.stateid
 			WHERE s.courseid = :courseid AND s.version = :version
+			ORDER BY se.sectionid, se.position
 		', array(
 			'courseid' => $this->_courseid,
 			'version' => $version
@@ -138,8 +139,37 @@ class State
 	 * Restore to a previous version.
 	 */
 	public function restore($version) {
+        global $DB;
+
 		if (!$this->can_restore($version)) {
 			return false;
 		}
+
+		$records = $this->get_version($version);
+
+		// Build sections.
+		$sections = array();
+		foreach ($records as $record) {
+			if (!isset($sections[$record->sectionid])) {
+				$sections[$record->sectionid] = array();
+			}
+
+			$sections[$record->sectionid][] = $record->cmid;
+		}
+
+		// Move everything around.
+		foreach ($sections as $sectionid => $cmids) {
+			$section = $DB->get_record('course_sections', array(
+				'id' => $sectionid
+			));
+
+			$section->sequence = implode(',', $cmids);
+
+			$DB->update_record('course_sections', $section);
+		}
+
+		rebuild_course_cache($this->_courseid, true);
+
+		return true;
 	}
 }

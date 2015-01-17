@@ -62,4 +62,42 @@ class block_sort_state_test extends advanced_testcase
         $state = new \block_sort\State($course->id);
         $this->assertFalse($state->can_restore($firstversion));
     }
+
+    /**
+     * Test restore.
+     */
+    public function test_restore() {
+        global $DB;
+
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_module('resource', array('course' => $course));
+        $this->getDataGenerator()->create_module('resource', array('course' => $course));
+        $this->getDataGenerator()->create_module('resource', array('course' => $course));
+        $this->getDataGenerator()->create_module('resource', array('course' => $course));
+        $this->getDataGenerator()->create_module('resource', array('course' => $course));
+        $this->getDataGenerator()->create_module('resource', array('course' => $course));
+        $section = $DB->get_records('course_sections');
+        $section = reset($section);
+
+        $state = new \block_sort\State($course->id);
+        $firstversion = $state->save();
+
+        $savedsequence = $section->sequence;
+
+        $cmids = explode(',', $savedsequence);
+        shuffle($cmids);
+        $section->sequence = implode(',', $cmids);
+
+        $DB->update_record('course_sections', $section);
+
+        $this->assertTrue($state->can_restore($firstversion));
+        $this->assertTrue($state->restore($firstversion));
+
+        $section = $DB->get_records('course_sections');
+        $section = reset($section);
+        $this->assertEquals($savedsequence, $section->sequence);
+    }
 }
