@@ -60,7 +60,7 @@ class block_sort extends block_base {
         }
 
         $this->content = new \stdClass;
-        $this->content->text = '';
+        $this->content->text = 'Sort?';
         $this->content->footer = '';
 
         return $this->content;

@@ -30,6 +30,7 @@ class State
 {
 	private $_courseid;
 	private $_statemap;
+	private $_cmids;
 
 	/**
 	 * Public constructor.
@@ -46,6 +47,7 @@ class State
 		global $DB;
 
 		$this->_statemap = array();
+		$this->_cmids = array();
 
 		// First list all sections.
 		$sections = $DB->get_records('course_sections', array(
@@ -55,6 +57,10 @@ class State
 		// Then, store order of course modules.
 		foreach ($sections as $section) {
 			$this->_statemap[$section->id] = explode(',', $section->sequence);
+
+			foreach ($this->_statemap[$section->id] as $cmid) {
+				$this->_cmids[] = $cmid;
+			}
 		}
 	}
 
@@ -68,7 +74,7 @@ class State
 			'courseid' => $this->_courseid
 		));
 
-		$DB->insert_record('block_sort_state', array(
+		$stateid = $DB->insert_record('block_sort_state', array(
 			'courseid' => $this->_courseid,
 			'version' => $version
 		));
@@ -78,7 +84,7 @@ class State
 			$pos = 0;
 			foreach ($cmids as $cmid) {
 				$records[] = array(
-					'stateid' => $version,
+					'stateid' => $stateid,
 					'cmid' => (int)$cmid,
 					'sectionid' => $section,
 					'position' => $pos
@@ -89,5 +95,51 @@ class State
 		}
 
 		$DB->insert_records('block_sort_state_entry', $records);
+
+		return $version;
+	}
+
+	/**
+	 * Get a version map.
+	 */
+	private function get_version($version) {
+		global $DB;
+
+		$records = $DB->get_records_sql('
+			SELECT se.cmid, se.sectionid, se.position
+			FROM {block_sort_state_entry} se
+			INNER JOIN {block_sort_state} s
+				ON s.id=se.stateid
+			WHERE s.courseid = :courseid AND s.version = :version
+		', array(
+			'courseid' => $this->_courseid,
+			'version' => $version
+		));
+
+		return $records;
+	}
+
+	/**
+	 * Can we restore to the given version?
+	 */
+	public function can_restore($version) {
+		$records = $this->get_version($version);
+
+		$cmids = array();
+		foreach ($records as $record) {
+			$cmids[] = $record->cmid;
+		}
+
+		return count(array_diff($cmids, $this->_cmids)) === 0 &&
+			   count(array_diff($this->_cmids, $cmids)) === 0;
+	}
+
+	/**
+	 * Restore to a previous version.
+	 */
+	public function restore($version) {
+		if (!$this->can_restore($version)) {
+			return false;
+		}
 	}
 }
